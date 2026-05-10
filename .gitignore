@@ -1,0 +1,9 @@
+.phpunit.cache/
+var/test.db
+
+/vendor/
+/var/
+/frontend/node_modules/
+/node_modules/
+/.env.local
+/.env.*.local

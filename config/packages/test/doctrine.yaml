@@ -1,0 +1,5 @@
+doctrine:
+  dbal:
+    url: '%env(resolve:DATABASE_URL)%'
+    server_version: null
+    profiling_collect_backtrace: false

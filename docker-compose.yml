@@ -1,0 +1,93 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "1"
+      APP_SECRET: change_me
+      DATABASE_URL: "pgsql://postgres:postgres@db:5432/app?serverVersion=16&charset=utf8"
+      REDIS_URL: "redis://redis:6379"
+      MESSENGER_TRANSPORT_DSN: "amqp://guest:guest@rabbitmq:5672/%2f"
+      TELEGRAM_SIMULATE_SEND_FAILURE: "${TELEGRAM_SIMULATE_SEND_FAILURE:-0}"
+    command: >
+      bash -lc "
+        until pg_isready -h db -p 5432 -U postgres; do
+          echo 'waiting for db...';
+          sleep 1;
+        done;
+        rm -rf var/cache/* || true;
+        chown -R www-data:www-data var;
+        su -s /bin/bash www-data -c 'php bin/console doctrine:migrations:migrate --no-interaction';
+        apache2-foreground
+      "
+    ports:
+      - "8000:80"
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+
+  # Static UI is baked at image build time. After editing frontend/, run:
+  #   docker compose build frontend && docker compose up -d frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "4200:80"
+    depends_on:
+      - app
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "1"
+      APP_SECRET: change_me
+      DATABASE_URL: "pgsql://postgres:postgres@db:5432/app?serverVersion=16&charset=utf8"
+      REDIS_URL: "redis://redis:6379"
+      MESSENGER_TRANSPORT_DSN: "amqp://guest:guest@rabbitmq:5672/%2f"
+      TELEGRAM_SIMULATE_SEND_FAILURE: "${TELEGRAM_SIMULATE_SEND_FAILURE:-0}"
+    command: >
+      bash -lc "
+        until pg_isready -h db -p 5432 -U postgres; do
+          echo 'waiting for db...';
+          sleep 1;
+        done;
+        su -s /bin/bash www-data -c 'php bin/console messenger:consume async -vv';
+      "
+    depends_on:
+      - app
+      - rabbitmq
+      - db
+      - redis
+
+volumes:
+  pgdata:
+

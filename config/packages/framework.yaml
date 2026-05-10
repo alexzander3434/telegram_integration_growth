@@ -1,0 +1,18 @@
+framework:
+  secret: '%env(APP_SECRET)%'
+  http_method_override: false
+  handle_all_throwables: true
+
+  serializer:
+    enabled: true
+
+  cache:
+    app: cache.adapter.redis
+    default_redis_provider: '%env(REDIS_URL)%'
+
+  http_client:
+    default_options:
+      timeout: 30
+
+  lock: '%env(REDIS_URL)%'
+
