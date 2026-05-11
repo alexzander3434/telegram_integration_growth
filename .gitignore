@@ -5,5 +5,6 @@ var/test.db
 /var/
 /frontend/node_modules/
 /node_modules/
+/.env
 /.env.local
 /.env.*.local

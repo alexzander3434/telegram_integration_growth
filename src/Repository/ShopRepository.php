@@ -26,5 +26,19 @@ final class ShopRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * @return list<string>
+     */
+    public function findAllIds(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.id')
+            ->orderBy('s.id', 'ASC')
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return array_map(static fn (mixed $id): string => (string) $id, $rows);
+    }
 }
 

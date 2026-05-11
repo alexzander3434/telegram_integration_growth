@@ -1,0 +1,135 @@
+<div class="rounded-2xl border bg-white p-6 shadow-sm">
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold">Интеграция Telegram</h2>
+      <p class="mt-1 text-sm text-slate-600">Подключите бота к этому магазину.</p>
+    </div>
+    <button
+      type="button"
+      (click)="loadTelegramStatus()"
+      [disabled]="!shopIdValid() || telegramStatusLoading()"
+      class="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+    >
+      @if (telegramStatusLoading()) { Обновление… } @else { Обновить статус }
+    </button>
+  </div>
+
+  <div class="mb-5 rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 shadow-inner">
+    <div class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Текущий статус интеграции</div>
+    @if (telegramStatusLoading() && !telegramStatus()) {
+      <div class="flex items-center gap-2 text-sm text-slate-500">
+        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></span>
+        Загрузка…
+      </div>
+    } @else if (telegramStatusError()) {
+      <div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {{ telegramStatusError() }}
+      </div>
+    } @else if (telegramStatus()) {
+      @let s = telegramStatus()!;
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        @if (s.chatId === null) {
+          <span
+            class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-800"
+            >Не настроено</span>
+        } @else if (s.enabled) {
+          <span
+            class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"
+            >Включена</span>
+        } @else {
+          <span
+            class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900"
+            >Отключена</span>
+        }
+      </div>
+      <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <div class="rounded-lg border border-slate-100 bg-white/80 px-3 py-2">
+          <dt class="text-xs text-slate-500">Chat ID (маскированный)</dt>
+          <dd class="mt-0.5 font-mono text-sm font-medium text-slate-900">{{ s.chatId ?? '—' }}</dd>
+        </div>
+        <div class="rounded-lg border border-slate-100 bg-white/80 px-3 py-2">
+          <dt class="text-xs text-slate-500">Последняя успешная отправка</dt>
+          <dd class="mt-0.5 font-medium text-slate-900">{{ s.lastSentAt ?? '—' }}</dd>
+        </div>
+        <div class="rounded-lg border border-slate-100 bg-white/80 px-3 py-2">
+          <dt class="text-xs text-slate-500">Успешно за 7 дней</dt>
+          <dd class="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{{ s.sentCount }}</dd>
+        </div>
+        <div class="rounded-lg border border-slate-100 bg-white/80 px-3 py-2">
+          <dt class="text-xs text-slate-500">Ошибок за 7 дней</dt>
+          <dd
+            class="mt-0.5 text-lg font-semibold tabular-nums"
+            [class.text-red-600]="s.failedCount > 0"
+            [class.text-slate-900]="s.failedCount === 0"
+          >
+            {{ s.failedCount }}
+          </dd>
+        </div>
+      </dl>
+    }
+  </div>
+
+  <form [formGroup]="integrationForm" (ngSubmit)="onSubmitIntegration()" class="space-y-5">
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Токен бота</label>
+      <input
+        formControlName="botToken"
+        type="text"
+        autocomplete="off"
+        class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        placeholder="123456:ABCDEF..."
+      />
+      @if (integrationForm.controls.botToken.touched && integrationForm.controls.botToken.invalid) {
+        <div class="mt-1 text-xs text-red-600">Укажите токен бота</div>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">ID чата</label>
+      <input
+        formControlName="chatId"
+        type="text"
+        autocomplete="off"
+        class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        placeholder="-1001234567890"
+      />
+      @if (integrationForm.controls.chatId.touched && integrationForm.controls.chatId.invalid) {
+        <div class="mt-1 text-xs text-red-600">Укажите ID чата</div>
+      }
+    </div>
+
+    <label class="flex items-center gap-3">
+      <input
+        formControlName="enabled"
+        type="checkbox"
+        class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-300"
+      />
+      <span class="text-sm text-slate-700">Включено</span>
+    </label>
+
+    @if (integrationSuccess()) {
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        Интеграция создана.
+      </div>
+    }
+
+    @if (integrationError()) {
+      <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        {{ integrationError() }}
+      </div>
+    }
+
+    <div class="flex items-center gap-3">
+      <button
+        type="submit"
+        [disabled]="integrationForm.invalid || submittingIntegration() || !shopIdValid()"
+        class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        @if (submittingIntegration()) { Сохранение… } @else { Подключить }
+      </button>
+      <div class="text-xs text-slate-500">
+        POST /shops/{{ shopId() }}/telegram/connect
+      </div>
+    </div>
+  </form>
+</div>

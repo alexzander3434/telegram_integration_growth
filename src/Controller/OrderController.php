@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Order;
 use App\Http\Request\CreateOrderRequest;
 use App\Message\OrderCreatedMessage;
+use App\Service\ShopIdsCache;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,6 +21,7 @@ final class OrderController
     public function create(
         int $shopId,
         Request $request,
+        ShopIdsCache $shopIdsCache,
         ValidatorInterface $validator,
         MessageBusInterface $bus,
         EntityManagerInterface $em,
@@ -27,6 +29,10 @@ final class OrderController
         $payload = json_decode($request->getContent() ?: '', true);
         if (!is_array($payload)) {
             return new JsonResponse(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!$shopIdsCache->shopExists($shopId)) {
+            return new JsonResponse(['error' => 'Shop not found'], Response::HTTP_NOT_FOUND);
         }
 
         $dto = new CreateOrderRequest(

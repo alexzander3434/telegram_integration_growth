@@ -89,28 +89,42 @@ final class TelegramIntegrationController
             );
         }
 
-        if ($repo->findOneByShopId($shopId) !== null) {
-            return new JsonResponse(
-                ['error' => 'Telegram integration for this shop already exists'],
-                Response::HTTP_CONFLICT
+        $existing = $repo->findOneByShopId($shopId);
+        $created = false;
+
+        if ($existing !== null) {
+            $integration = $existing;
+            $integration->setBotToken($dto->botTokenString());
+            $integration->setChatId($dto->chatIdString());
+            $integration->setEnabled($dto->enabledBool());
+        } else {
+            $integration = new TelegramIntegration(
+                shopId: $shopId,
+                botToken: $dto->botTokenString(),
+                chatId: $dto->chatIdString(),
+                enabled: $dto->enabledBool(),
             );
+            $em->persist($integration);
+            $created = true;
         }
 
-        $integration = new TelegramIntegration(
-            shopId: $shopId,
-            botToken: $dto->botTokenString(),
-            chatId: $dto->chatIdString(),
-            enabled: $dto->enabledBool(),
-        );
-
         try {
-            $em->persist($integration);
             $em->flush();
         } catch (UniqueConstraintViolationException) {
-            return new JsonResponse(
-                ['error' => 'Telegram integration for this shop already exists'],
-                Response::HTTP_CONFLICT
-            );
+            // Rare race: two concurrent creates for the same shop.
+            $em->detach($integration);
+            $integration = $repo->findOneByShopId($shopId);
+            if ($integration === null) {
+                return new JsonResponse(
+                    ['error' => 'Could not save Telegram integration'],
+                    Response::HTTP_INTERNAL_SERVER_ERROR
+                );
+            }
+            $integration->setBotToken($dto->botTokenString());
+            $integration->setChatId($dto->chatIdString());
+            $integration->setEnabled($dto->enabledBool());
+            $em->flush();
+            $created = false;
         }
 
         $cache->upsertShopIntegration(
@@ -119,6 +133,8 @@ final class TelegramIntegrationController
             chatId: $integration->getChatId(),
             enabled: $integration->isEnabled(),
         );
+
+        $status = $created ? Response::HTTP_CREATED : Response::HTTP_OK;
 
         return new JsonResponse(
             [
@@ -129,7 +145,7 @@ final class TelegramIntegrationController
                 'createdAt' => $integration->getCreatedAt()->format(DATE_ATOM),
                 'updatedAt' => $integration->getUpdatedAt()->format(DATE_ATOM),
             ],
-            Response::HTTP_CREATED
+            $status
         );
     }
 

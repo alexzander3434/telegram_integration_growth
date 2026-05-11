@@ -1,0 +1,70 @@
+<div class="rounded-2xl border bg-white p-6 shadow-sm">
+  <div class="mb-4">
+    <h2 class="text-lg font-semibold">Создать заказ</h2>
+    <p class="mt-1 text-sm text-slate-600">Новый заказ для этого магазина.</p>
+  </div>
+
+  <form [formGroup]="orderForm" (ngSubmit)="onSubmitOrder()" class="space-y-5">
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Номер</label>
+      <input
+        formControlName="number"
+        type="text"
+        autocomplete="off"
+        class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        placeholder="A-1005"
+      />
+      @if (orderForm.controls.number.touched && orderForm.controls.number.invalid) {
+        <div class="mt-1 text-xs text-red-600">Укажите номер</div>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Сумма, ₽</label>
+      <input
+        formControlName="total"
+        type="number"
+        inputmode="decimal"
+        class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        placeholder="2490"
+      />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Имя клиента</label>
+      <input
+        formControlName="customerName"
+        type="text"
+        autocomplete="off"
+        class="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+        placeholder="Анна"
+      />
+      @if (orderForm.controls.customerName.touched && orderForm.controls.customerName.invalid) {
+        <div class="mt-1 text-xs text-red-600">Укажите имя клиента</div>
+      }
+    </div>
+
+    @if (orderSuccess()) {
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        Заказ создан.
+      </div>
+    }
+
+    @if (orderError()) {
+      <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        {{ orderError() }}
+      </div>
+    }
+
+    <div class="flex items-center gap-3">
+      <button
+        type="submit"
+        [disabled]="orderForm.invalid || submittingOrder() || !shopIdValid()"
+        class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        @if (submittingOrder()) { Сохранение… } @else { Создать заказ }
+      </button>
+      <div class="text-xs text-slate-500">POST /shops/{{ shopId() }}/orders</div>
+    </div>
+  </form>
+</div>

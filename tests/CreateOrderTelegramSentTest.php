@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests;
 
 use App\Entity\Order;
+use App\Entity\Shop;
 use App\Entity\TelegramIntegration;
 use App\Entity\TelegramSendLog;
 use App\Entity\TelegramSendStatus;
@@ -21,6 +22,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 final class CreateOrderTelegramSentTest extends KernelTestCase
 {
+    private int $shopId;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -43,8 +46,13 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
         $tool->dropSchema($classes);
         $tool->createSchema($classes);
 
+        $shop = new Shop('Test shop');
+        $em->persist($shop);
+        $em->flush();
+        $this->shopId = (int) $shop->getId();
+
         $em->persist(new TelegramIntegration(
-            shopId: 101,
+            shopId: $this->shopId,
             botToken: 'test-token',
             chatId: '12345',
             enabled: true
@@ -66,7 +74,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
         ];
 
         $request = Request::create(
-            '/shops/101/orders',
+            sprintf('/shops/%d/orders', $this->shopId),
             'POST',
             [],
             [],
@@ -86,7 +94,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
 
             /** @var TelegramSendLogRepository $logRepo */
             $logRepo = static::getContainer()->get(TelegramSendLogRepository::class);
-            $log = $logRepo->findOneByShopIdAndOrderId('101', $orderId);
+            $log = $logRepo->findOneByShopIdAndOrderId((string) $this->shopId, $orderId);
             self::assertNotNull($log);
             self::assertSame(TelegramSendStatus::SENT, $log->getStatus());
 
@@ -111,7 +119,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
         ];
 
         $request = Request::create(
-            '/shops/101/orders',
+            sprintf('/shops/%d/orders', $this->shopId),
             'POST',
             [],
             [],
@@ -135,7 +143,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
 
             $message = new OrderCreatedMessage(
                 orderId: $orderId,
-                shopId: '101',
+                shopId: (string) $this->shopId,
                 number: $payload['number'],
                 total: $payload['total'],
                 customerName: $payload['customerName'],
@@ -155,7 +163,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
                 ->select('COUNT(l.id)')
                 ->from(TelegramSendLog::class, 'l')
                 ->where('l.shopId = :shopId')->andWhere('l.orderId = :orderId')
-                ->setParameter('shopId', '101')
+                ->setParameter('shopId', (string) $this->shopId)
                 ->setParameter('orderId', $orderId)
                 ->getQuery()
                 ->getSingleScalarResult();
@@ -164,7 +172,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
 
             /** @var TelegramSendLogRepository $logRepo */
             $logRepo = static::getContainer()->get(TelegramSendLogRepository::class);
-            $logs = $logRepo->findBy(['shopId' => '101', 'orderId' => $orderId]);
+            $logs = $logRepo->findBy(['shopId' => (string) $this->shopId, 'orderId' => $orderId]);
             self::assertCount(1, $logs);
             self::assertSame(TelegramSendStatus::SENT, $logs[0]->getStatus());
         } finally {
@@ -185,7 +193,15 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
         ];
         $body = (string) json_encode($payload, JSON_THROW_ON_ERROR);
 
-        $request1 = Request::create('/shops/101/orders', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json'], $body);
+        $request1 = Request::create(
+            sprintf('/shops/%d/orders', $this->shopId),
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            $body
+        );
         $response1 = $kernel->handle($request1);
 
         try {
@@ -199,7 +215,15 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
             $http = static::getContainer()->get('test.telegram_http_client');
             self::assertSame(1, $http->getRequestsCount());
 
-            $request2 = Request::create('/shops/101/orders', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json'], $body);
+            $request2 = Request::create(
+                sprintf('/shops/%d/orders', $this->shopId),
+                'POST',
+                [],
+                [],
+                [],
+                ['CONTENT_TYPE' => 'application/json'],
+                $body
+            );
             $response2 = $kernel->handle($request2);
 
             try {
@@ -216,7 +240,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
                 ->select('COUNT(l.id)')
                 ->from(TelegramSendLog::class, 'l')
                 ->where('l.shopId = :shopId')->andWhere('l.orderId = :orderId')
-                ->setParameter('shopId', '101')
+                ->setParameter('shopId', (string) $this->shopId)
                 ->setParameter('orderId', $orderId)
                 ->getQuery()
                 ->getSingleScalarResult();
@@ -252,7 +276,7 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
         ];
 
         $request = Request::create(
-            '/shops/101/orders',
+            sprintf('/shops/%d/orders', $this->shopId),
             'POST',
             [],
             [],
@@ -276,12 +300,106 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
 
             /** @var TelegramSendLogRepository $logRepo */
             $logRepo = static::getContainer()->get(TelegramSendLogRepository::class);
-            $log = $logRepo->findOneByShopIdAndOrderId('101', $orderId);
+            $log = $logRepo->findOneByShopIdAndOrderId((string) $this->shopId, $orderId);
             self::assertNotNull($log);
             self::assertSame(TelegramSendStatus::FAILED, $log->getStatus());
             self::assertStringContainsString('telegram api rejected send', (string) $log->getError());
 
             self::assertGreaterThanOrEqual(1, $http->getRequestsCount());
+        } finally {
+            $kernel->terminate($request, $response);
+        }
+    }
+
+    #[RunInSeparateProcess]
+    public function testCreateOrderReturns404WhenShopDoesNotExist(): void
+    {
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+
+        $payload = [
+            'number' => 'ORD-404-'.bin2hex(random_bytes(4)),
+            'total' => '1.00',
+            'customerName' => 'Nope',
+        ];
+
+        $unknownShopId = 9_999_999;
+        self::assertNotSame($unknownShopId, $this->shopId);
+
+        $request = Request::create(
+            sprintf('/shops/%d/orders', $unknownShopId),
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode($payload, JSON_THROW_ON_ERROR)
+        );
+
+        $response = $kernel->handle($request);
+
+        try {
+            self::assertSame(404, $response->getStatusCode(), (string) $response->getContent());
+            $decoded = json_decode((string) $response->getContent(), true);
+            self::assertIsArray($decoded);
+            self::assertSame('Shop not found', $decoded['error'] ?? null);
+        } finally {
+            $kernel->terminate($request, $response);
+        }
+    }
+
+    #[RunInSeparateProcess]
+    public function testCreateOrderReturns404ForUnknownShopWhenShopIdsCacheAlreadyWarm(): void
+    {
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+
+        $warmPayload = [
+            'number' => 'ORD-warm-cache-'.bin2hex(random_bytes(4)),
+            'total' => '1.00',
+            'customerName' => 'Warm',
+        ];
+        $warmRequest = Request::create(
+            sprintf('/shops/%d/orders', $this->shopId),
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode($warmPayload, JSON_THROW_ON_ERROR)
+        );
+        $warmResponse = $kernel->handle($warmRequest);
+        try {
+            self::assertSame(201, $warmResponse->getStatusCode(), (string) $warmResponse->getContent());
+        } finally {
+            $kernel->terminate($warmRequest, $warmResponse);
+        }
+
+        $unknownShopId = 8_888_888;
+        self::assertNotSame($unknownShopId, $this->shopId);
+
+        $payload = [
+            'number' => 'ORD-404-warm-'.bin2hex(random_bytes(4)),
+            'total' => '2.00',
+            'customerName' => 'Still nope',
+        ];
+        $request = Request::create(
+            sprintf('/shops/%d/orders', $unknownShopId),
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode($payload, JSON_THROW_ON_ERROR)
+        );
+
+        $response = $kernel->handle($request);
+
+        try {
+            self::assertSame(404, $response->getStatusCode(), (string) $response->getContent());
+            $decoded = json_decode((string) $response->getContent(), true);
+            self::assertIsArray($decoded);
+            self::assertSame('Shop not found', $decoded['error'] ?? null);
         } finally {
             $kernel->terminate($request, $response);
         }
