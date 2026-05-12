@@ -15,6 +15,8 @@ export type TelegramIntegrationStatus = {
   lastSentAt: string | null;
   sentCount: number;
   failedCount: number;
+  lastFailedAt: string | null;
+  lastError: string | null;
 };
 
 export type CreateOrderPayload = {

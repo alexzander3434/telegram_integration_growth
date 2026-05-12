@@ -32,6 +32,8 @@ final class TelegramIntegrationController
                 'lastSentAt' => null,
                 'sentCount' => 0,
                 'failedCount' => 0,
+                'lastFailedAt' => null,
+                'lastError' => null,
             ]);
         }
 
@@ -40,6 +42,7 @@ final class TelegramIntegrationController
         $sentCount = $sendLogRepo->countByShopAndStatusSince($shopIdStr, TelegramSendStatus::SENT, $since);
         $failedCount = $sendLogRepo->countByShopAndStatusSince($shopIdStr, TelegramSendStatus::FAILED, $since);
         $lastSentAt = $sendLogRepo->findLastSuccessfulSentAt($shopIdStr);
+        $lastFailed = $sendLogRepo->findLastFailedByShopIdSince($shopIdStr, $since);
 
         return new JsonResponse([
             'enabled' => $integration->isEnabled(),
@@ -47,6 +50,8 @@ final class TelegramIntegrationController
             'lastSentAt' => $lastSentAt?->format(DATE_ATOM),
             'sentCount' => $sentCount,
             'failedCount' => $failedCount,
+            'lastFailedAt' => $lastFailed?->getSentAt()->format(DATE_ATOM),
+            'lastError' => $lastFailed !== null ? self::truncatePublicError($lastFailed->getError()) : null,
         ]);
     }
 
@@ -161,6 +166,18 @@ final class TelegramIntegrationController
         }
 
         return substr($chatId, 0, 2) . '***' . substr($chatId, -2);
+    }
+
+    private static function truncatePublicError(?string $error): ?string
+    {
+        if ($error === null || $error === '') {
+            return null;
+        }
+        if (strlen($error) <= 500) {
+            return $error;
+        }
+
+        return substr($error, 0, 497).'…';
     }
 }
 

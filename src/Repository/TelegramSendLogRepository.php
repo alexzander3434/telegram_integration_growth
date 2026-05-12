@@ -55,4 +55,19 @@ final class TelegramSendLogRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function findLastFailedByShopIdSince(string $shopId, \DateTimeImmutable $since): ?TelegramSendLog
+    {
+        return $this->createQueryBuilder('l')
+            ->where('l.shopId = :shopId')
+            ->andWhere('l.status = :status')
+            ->andWhere('l.sentAt >= :since')
+            ->setParameter('shopId', $shopId)
+            ->setParameter('status', TelegramSendStatus::FAILED)
+            ->setParameter('since', $since)
+            ->orderBy('l.sentAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

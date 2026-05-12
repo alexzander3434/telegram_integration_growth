@@ -4,11 +4,12 @@ namespace App\Service;
 
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
- * HTTP client for Telegram Bot API (sendMessage only).
+ * HTTP client for Telegram Bot API (sendMessage).
  *
- * Set env TELEGRAM_SIMULATE_SEND_FAILURE=1 to throw before the HTTP call (dev/QA).
+ * Set env TELEGRAM_SIMULATE_SEND_FAILURE=1 to throw before outbound HTTP calls (dev/QA).
  */
 final class TelegramSendApiService
 {
@@ -37,6 +38,11 @@ final class TelegramSendApiService
             'timeout' => 30,
         ]);
 
+        $this->assertTelegramOkResponse($response);
+    }
+
+    private function assertTelegramOkResponse(ResponseInterface $response): void
+    {
         $status = $response->getStatusCode();
         $data = $response->toArray(false);
 

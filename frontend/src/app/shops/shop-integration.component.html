@@ -65,6 +65,17 @@
             {{ s.failedCount }}
           </dd>
         </div>
+        @if (s.lastError) {
+          <div class="rounded-lg border border-red-100 bg-red-50/90 px-3 py-2 sm:col-span-2">
+            <div class="text-xs font-medium text-red-800">Последняя ошибка отправки</div>
+            <div class="mt-1 whitespace-pre-wrap break-words text-sm text-red-900">
+              {{ s.lastError }}
+            </div>
+            @if (s.lastFailedAt) {
+              <p class="mt-1 text-xs text-red-700/90">{{ s.lastFailedAt }}</p>
+            }
+          </div>
+        }
       </dl>
     }
   </div>

@@ -404,4 +404,62 @@ final class CreateOrderTelegramSentTest extends KernelTestCase
             $kernel->terminate($request, $response);
         }
     }
+
+    #[RunInSeparateProcess]
+    public function testTelegramStatusIncludesLastErrorAfterFailedSend(): void
+    {
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+
+        /** @var MockHttpClient $http */
+        $http = static::getContainer()->get('test.telegram_http_client');
+        $http->setResponseFactory(static function (): MockResponse {
+            return new MockResponse(
+                (string) json_encode([
+                    'ok' => false,
+                    'description' => 'status endpoint failure text',
+                ], JSON_THROW_ON_ERROR),
+                ['http_code' => 200, 'headers' => ['Content-Type' => 'application/json']]
+            );
+        });
+
+        $payload = [
+            'number' => 'ORD-status-'.bin2hex(random_bytes(4)),
+            'total' => '11.00',
+            'customerName' => 'Status',
+        ];
+
+        $orderRequest = Request::create(
+            sprintf('/shops/%d/orders', $this->shopId),
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode($payload, JSON_THROW_ON_ERROR)
+        );
+
+        $orderResponse = $kernel->handle($orderRequest);
+        try {
+            self::assertSame(201, $orderResponse->getStatusCode(), (string) $orderResponse->getContent());
+        } finally {
+            $kernel->terminate($orderRequest, $orderResponse);
+        }
+
+        $statusRequest = Request::create(
+            sprintf('/shops/%d/telegram/status', $this->shopId),
+            'GET'
+        );
+        $statusResponse = $kernel->handle($statusRequest);
+        try {
+            self::assertSame(200, $statusResponse->getStatusCode(), (string) $statusResponse->getContent());
+            $decoded = json_decode((string) $statusResponse->getContent(), true);
+            self::assertIsArray($decoded);
+            self::assertGreaterThanOrEqual(1, (int) ($decoded['failedCount'] ?? 0));
+            self::assertStringContainsString('status endpoint failure text', (string) ($decoded['lastError'] ?? ''));
+            self::assertNotEmpty($decoded['lastFailedAt'] ?? null);
+        } finally {
+            $kernel->terminate($statusRequest, $statusResponse);
+        }
+    }
 }

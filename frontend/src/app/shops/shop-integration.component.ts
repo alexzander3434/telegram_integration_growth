@@ -87,10 +87,23 @@ export class ShopIntegrationComponent {
         },
         error: (err) => {
           const status = err?.status;
+          const body = err?.error;
+          const tokenMsg =
+            typeof body?.message === 'string' && body.message.trim() !== ''
+              ? body.message
+              : null;
           if (status === 409) {
             this.integrationError.set('Конфликт при сохранении интеграции.');
           } else if (status === 422) {
-            this.integrationError.set('Проверьте корректность введённых данных.');
+            if (tokenMsg) {
+              this.integrationError.set(tokenMsg);
+            } else if (Array.isArray(body?.details) && body.details.length > 0) {
+              this.integrationError.set(
+                body.details.map((d: { message?: string }) => d.message ?? '').filter(Boolean).join(' '),
+              );
+            } else {
+              this.integrationError.set('Проверьте корректность введённых данных.');
+            }
           } else {
             this.integrationError.set(err?.message ?? 'Не удалось создать интеграцию');
           }
